@@ -6,6 +6,3 @@
 #define DISABLE_RGB_MATRIX_ALPHAS_MODS
 
 #define EECONFIG_RGB_MATRIX (uint32_t *)16
-
-#define FORCE_NKRO
-#define QMK_KEYS_PER_SCAN 4
