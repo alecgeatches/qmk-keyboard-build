@@ -4,9 +4,13 @@
 #include "version.h"
 #include "keymap_german.h"
 #include "keymap_nordic.h"
-#include "quantum.h"
 
-extern rgb_config_t rgb_matrix_config;
+#include "quantum.h"
+#include <math.h>
+
+#ifndef PI
+#define PI 3.14159265
+#endif
 
 enum custom_keycodes {
   PLACEHOLDER = SAFE_RANGE, // can always be here
@@ -16,10 +20,11 @@ enum custom_keycodes {
   HSV_135_121_255,
   ALECG_RGB_TO_GRAD,
   ALECG_RGB_HUE_CYCLE_ONE_BUTTON,
+  ALECG_RGB_CUSTOM_ANIMATION,
 };
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
-  [0] = LAYOUT_ergodox(KC_ESCAPE,KC_1,KC_2,KC_3,KC_4,KC_5,MO(3),KC_TAB,KC_Q,KC_W,KC_F,KC_P,KC_G,KC_TRANSPARENT,KC_BSPACE,KC_A,KC_R,KC_S,KC_T,KC_D,KC_LSHIFT,KC_Z,KC_X,KC_C,KC_V,KC_B,MO(5),KC_GRAVE,KC_QUOTE,LALT(KC_NO),KC_LCTRL,KC_RCTRL,KC_APPLICATION,KC_LGUI, /* tF1: */ RGB_MOD,KC_SPACE,MO(2), /* tF2: */ KC_TRANSPARENT,TG(1),KC_6,KC_7,KC_8,KC_9,KC_0,KC_MINUS,KC_TRANSPARENT,KC_J,KC_L,KC_U,KC_Y,KC_SCOLON,KC_BSLASH,KC_H,KC_N,KC_E,KC_I,KC_O,KC_QUOTE,KC_MEH,KC_K,KC_M,KC_COMMA,KC_DOT,KC_SLASH,KC_RSHIFT,MO(4),KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_RGUI,KC_DELETE,/* tF3: */ ALECG_RGB_TO_GRAD, /* tF4: */ ALECG_RGB_HUE_CYCLE_ONE_BUTTON,LALT(KC_NO),KC_ENTER),
+  [0] = LAYOUT_ergodox(KC_ESCAPE,KC_1,KC_2,KC_3,KC_4,KC_5,MO(3),KC_TAB,KC_Q,KC_W,KC_F,KC_P,KC_G,KC_TRANSPARENT,KC_BSPACE,KC_A,KC_R,KC_S,KC_T,KC_D,KC_LSHIFT,KC_Z,KC_X,KC_C,KC_V,KC_B,MO(5),KC_GRAVE,KC_QUOTE,LALT(KC_NO),KC_LCTRL,KC_RCTRL,KC_APPLICATION,KC_LGUI, /* tF1: */ RGB_MOD,KC_SPACE,MO(2), /* tF2: */ ALECG_RGB_CUSTOM_ANIMATION,TG(1),KC_6,KC_7,KC_8,KC_9,KC_0,KC_MINUS,KC_TRANSPARENT,KC_J,KC_L,KC_U,KC_Y,KC_SCOLON,KC_BSLASH,KC_H,KC_N,KC_E,KC_I,KC_O,KC_QUOTE,KC_MEH,KC_K,KC_M,KC_COMMA,KC_DOT,KC_SLASH,KC_RSHIFT,MO(4),KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_RGUI,KC_DELETE,/* tF3: */ ALECG_RGB_TO_GRAD, /* tF4: */ ALECG_RGB_HUE_CYCLE_ONE_BUTTON,LALT(KC_NO),KC_ENTER),
 
   [1] = LAYOUT_ergodox(KC_TRANSPARENT,KC_1,KC_2,KC_3,KC_4,KC_5,KC_TRANSPARENT,KC_TRANSPARENT,KC_Q,KC_W,KC_E,KC_R,KC_T,TO(0),KC_TRANSPARENT,KC_A,KC_S,KC_D,KC_F,KC_G,KC_TRANSPARENT,KC_Z,KC_X,KC_C,KC_V,KC_B,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,RGB_MOD,KC_TRANSPARENT,KC_TRANSPARENT,RGB_SLD,KC_TRANSPARENT,KC_6,KC_7,KC_8,KC_9,KC_0,KC_TRANSPARENT,KC_TRANSPARENT,KC_Y,KC_U,KC_I,KC_O,KC_P,KC_TRANSPARENT,KC_H,KC_J,KC_K,KC_L,KC_SCOLON,KC_TRANSPARENT,KC_TRANSPARENT,KC_N,KC_M,KC_COMMA,KC_DOT,KC_SLASH,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,KC_TRANSPARENT,RGB_HUI,RGB_HUD,KC_TRANSPARENT,KC_TRANSPARENT),
 
@@ -49,7 +54,7 @@ const uint8_t PROGMEM ledmap[][DRIVER_LED_TOTAL][3] = {
 
 };
 
-void set_leds_color( int layer) {
+void set_leds_color(int layer) {
   rgb_matrix_mode_noeeprom(1);
   for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
     uint8_t val = pgm_read_byte(&ledmap[layer][i][2]);
@@ -63,33 +68,112 @@ void set_leds_color( int layer) {
   }
 }
 
+enum alecg_custom_animations {
+  ALECG_CUSTOM_ANIMATION_OFF = 0,
+  ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE,
+  ALECG_CUSTOM_ANIMATION_LAST,
+};
+
+uint16_t alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
+uint8_t breathe_current = 0;
+uint8_t breathe_direction = 1;
+uint8_t breathe_pause_tick = 0;
+
+void alecg_run_custom_animation(void) {
+  uint32_t tick = rgb_matrix_get_tick();
+
+  if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE) {
+    uint8_t breathe_max = 60;
+    uint16_t breathe_update_ticks = 4;
+    uint16_t breathe_pause_ticks = 100;
+
+    if((tick % breathe_update_ticks) == 0) {
+      if(breathe_current == breathe_max || breathe_current == 0) {
+        breathe_direction = 0;
+      }
+
+      if(breathe_direction == 0) {
+        breathe_pause_tick++;
+      }
+
+      if(breathe_pause_tick > breathe_pause_ticks) {
+        breathe_pause_tick = 0;
+        breathe_direction = breathe_current == 0 ? 1 : -1;
+      }
+
+      breathe_current += breathe_direction;
+    }
+
+    int16_t h1 = rgb_matrix_config.hue;
+    int16_t h2 = (rgb_matrix_config.hue + 180) % 360;
+    int16_t deltaH = h2 - h1;
+
+    // Take the shortest path between hues
+    if (deltaH > 127) {
+      deltaH -= 256;
+    } else if (deltaH < -127) {
+      deltaH += 256;
+    }
+
+    // Divide delta by 4, this gives the delta per row
+    deltaH /= 4;
+
+    int16_t s1 = rgb_matrix_config.sat;
+    int16_t s2 = rgb_matrix_config.hue;
+    int16_t deltaS = (s2 - s1) / 4;
+
+    HSV hsv = { .h = 0, .s = 255, .v = rgb_matrix_config.val };
+    RGB rgb;
+    Point point;
+    for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
+        // map_led_to_point( i, &point );
+        point = g_rgb_leds[i].point;
+        // The y range will be 0..64, map this to 0..4
+        uint8_t y = (point.y >> 4);
+        // Relies on hue being 8-bit and wrapping
+        hsv.h = rgb_matrix_config.hue + (deltaH * y) + breathe_current;
+        hsv.s = rgb_matrix_config.sat + (deltaS * y);
+        rgb = hsv_to_rgb( hsv );
+        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+    }
+  }
+}
+
 void rgb_matrix_indicators_user(void) {
-  if(suspended == false) {
-    uint8_t layer = biton32(layer_state);
-    switch (layer) {
-      case 0:
-        rgb_matrix_config.raw = eeprom_read_dword(EECONFIG_RGB_MATRIX);
+  if(suspended) {
+    return;
+  }
+
+  uint8_t layer = biton32(layer_state);
+  switch (layer) {
+    case 0:
+      rgb_matrix_config.raw = eeprom_read_dword(EECONFIG_RGB_MATRIX);
+
+      if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_OFF) {
         rgb_matrix_mode_noeeprom(rgb_matrix_config.mode);
         if(rgb_matrix_config.mode != 1) {
           rgb_matrix_sethsv_noeeprom(rgb_matrix_config.hue, rgb_matrix_config.sat, rgb_matrix_config.val);
         }
-        break;
-      case 1:
-        set_leds_color(1);
-        break;
-      case 2:
-        set_leds_color(2);
-        break;
-      case 3:
-        set_leds_color(3);
-        break;
-      case 4:
-        set_leds_color(4);
-        break;
-      case 5:
-        set_leds_color(5);
-        break;
-    }
+      } else {
+        rgb_matrix_mode_noeeprom(1);
+        alecg_run_custom_animation();
+      }
+      break;
+    case 1:
+      set_leds_color(1);
+      break;
+    case 2:
+      set_leds_color(2);
+      break;
+    case 3:
+      set_leds_color(3);
+      break;
+    case 4:
+      set_leds_color(4);
+      break;
+    case 5:
+      set_leds_color(5);
+      break;
   }
 }
 const uint16_t PROGMEM fn_actions[] = {
@@ -150,6 +234,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
       break;
     case ALECG_RGB_HUE_CYCLE_ONE_BUTTON:
       if (record->event.pressed) {
+        rgb_matrix_config.raw = eeprom_read_dword(EECONFIG_RGB_MATRIX);
+
         uint8_t shifted = get_mods() & (MOD_BIT(KC_LSHIFT)|MOD_BIT(KC_RSHIFT));
         if(shifted) {
           rgb_matrix_config.hue = rgb_matrix_config.hue - 8;
@@ -162,6 +248,16 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         }
 
         eeprom_update_dword(EECONFIG_RGB_MATRIX, rgb_matrix_config.raw);
+      }
+      return false;
+      break;
+    case ALECG_RGB_CUSTOM_ANIMATION:
+      if (record->event.pressed) {
+        alecg_custom_animation++;
+
+        if (alecg_custom_animation >= ALECG_CUSTOM_ANIMATION_LAST) {
+          alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
+        }
       }
       return false;
       break;
