@@ -2,5 +2,6 @@
     "files.associations": {
         "drashna.h": "c"
     },
-    "search.useIgnoreFiles": false
+    "search.useIgnoreFiles": false,
+    "C_Cpp.workspaceSymbols": "All"
 }

@@ -68,31 +68,76 @@ void set_leds_color(int layer) {
   }
 }
 
-#define ALECG_BREATH_MAX 80
-#define ALECG_BREATH_TICKS_PER_FRAME 4
-#define ALECG_BREATH_CYCLE_FRAMES 250
+enum alecg_keyboard_side {
+  SIDE_LEFT = 0,
+  SIDE_RIGHT = 1,
+};
+
+uint8_t alecg_get_led(uint8_t side, uint8_t row, uint8_t column) {
+  static uint8_t alecg_led_mapping[2][5][5] = {{{0}}};
+
+  if(row > 4 || column > 4) {
+    return 0;
+  }
+
+  // Left side of the board goes right-to-left, so reverse column coordinate if on left side
+  if(side == SIDE_LEFT) {
+    column = 4 - column;
+  }
+
+  // All columns after the first row start at index 5. If we're getting row 1+, add 5 first
+  if(row > 1) {
+    column += 5;
+  }
+
+
+  if(alecg_led_mapping[side][row][column] == 0) {
+    uint8_t led_count_initializer = side == SIDE_RIGHT ? 0 : DRIVER_1_LED_TOTAL;
+    uint8_t led_count_end         = side == SIDE_RIGHT ? DRIVER_1_LED_TOTAL : DRIVER_LED_TOTAL;
+    rgb_led led;
+
+    for (uint8_t i = led_count_initializer; i < led_count_end; i++) {
+      led = g_rgb_leds[i];
+      if (row == led.matrix_co.row && column == led.matrix_co.col) {
+        alecg_led_mapping[side][row][column] = i;
+        break;
+      }
+    }
+  }
+
+  return alecg_led_mapping[side][row][column];
+}
 
 enum alecg_custom_animations {
   ALECG_CUSTOM_ANIMATION_OFF = 0,
   ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE,
+  ALECG_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS,
   ALECG_CUSTOM_ANIMATION_LAST,
 };
 
-uint16_t alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
+#define ALECG_BREATH_MAX 80
+#define ALECG_BREATH_TICKS_PER_FRAME 4
+#define ALECG_BREATH_CYCLE_FRAMES 250
 
-float breathe_current = 0;
-uint16_t breathe_frame = 0;
-int8_t breathe_direction = 1;
+#define ALECG_RAINBOW_HOME_KEYS_TICKS_PER_FRAME 3
+
+uint16_t alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
 
 void alecg_run_custom_animation(void) {
   uint32_t tick = rgb_matrix_get_tick();
 
   if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE) {
+    static float breathe_current = 0;
+    static uint16_t breathe_frame = 0;
+    static int8_t breathe_direction = 1;
+
     if((tick % ALECG_BREATH_TICKS_PER_FRAME) == 0) {
       breathe_frame += breathe_direction;
 
       float t = (float)breathe_frame / (float)ALECG_BREATH_CYCLE_FRAMES;
 
+      // https://easings.net
+      // http://www.gizma.com/easing/
       // https://stackoverflow.com/a/25730573/770938 (ParametricBlend)
       // float sqt = square(t);
       // breathe_current = sqt / (2.0f * (sqt - t) + 1.0f);
@@ -141,6 +186,35 @@ void alecg_run_custom_animation(void) {
         hsv.s = rgb_matrix_config.sat + (deltaS * y);
         rgb = hsv_to_rgb( hsv );
         rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+    }
+  } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS) {
+    static uint8_t v_modifier = 0;
+    if((tick % ALECG_RAINBOW_HOME_KEYS_TICKS_PER_FRAME) == 0) {
+      v_modifier += 1;
+    }
+
+    for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
+        RGB rgb;
+        HSV hsv = { .h = rgb_matrix_config.hue, .s = rgb_matrix_config.sat * 0.8, .v = rgb_matrix_config.val * 0.8 };
+        rgb = hsv_to_rgb(hsv);
+        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+    }
+
+    uint8_t home_keys[] = {
+      alecg_get_led(SIDE_LEFT, 2, 0), alecg_get_led(SIDE_LEFT, 2, 1), alecg_get_led(SIDE_LEFT, 2, 2), alecg_get_led(SIDE_LEFT, 2, 3),
+      alecg_get_led(SIDE_RIGHT, 2, 1), alecg_get_led(SIDE_RIGHT, 2, 2), alecg_get_led(SIDE_RIGHT, 2, 3), alecg_get_led(SIDE_RIGHT, 2, 4),
+    };
+    uint8_t home_keys_length = sizeof(home_keys) / sizeof(uint8_t);
+
+    RGB rgb;
+    HSV hsv = { .h = 0, .s = 255, .v = 255 };
+
+    for(int i = 0; i < home_keys_length; i++) {
+      uint8_t key = home_keys[i];
+
+      hsv.h = i * (255 / home_keys_length) - v_modifier;
+      rgb = hsv_to_rgb(hsv);
+      rgb_matrix_set_color(key, rgb.r, rgb.g, rgb.b);
     }
   }
 }
