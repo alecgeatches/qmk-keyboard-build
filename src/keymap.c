@@ -68,6 +68,10 @@ void set_leds_color(int layer) {
   }
 }
 
+#define ALECG_BREATH_MAX 80
+#define ALECG_BREATH_TICKS_PER_FRAME 4
+#define ALECG_BREATH_CYCLE_FRAMES 250
+
 enum alecg_custom_animations {
   ALECG_CUSTOM_ANIMATION_OFF = 0,
   ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE,
@@ -75,33 +79,35 @@ enum alecg_custom_animations {
 };
 
 uint16_t alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
-uint8_t breathe_current = 0;
-uint8_t breathe_direction = 1;
-uint8_t breathe_pause_tick = 0;
+
+float breathe_current = 0;
+uint16_t breathe_frame = 0;
+int8_t breathe_direction = 1;
 
 void alecg_run_custom_animation(void) {
   uint32_t tick = rgb_matrix_get_tick();
 
   if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE) {
-    uint8_t breathe_max = 60;
-    uint16_t breathe_update_ticks = 4;
-    uint16_t breathe_pause_ticks = 100;
+    if((tick % ALECG_BREATH_TICKS_PER_FRAME) == 0) {
+      breathe_frame += breathe_direction;
 
-    if((tick % breathe_update_ticks) == 0) {
-      if(breathe_current == breathe_max || breathe_current == 0) {
-        breathe_direction = 0;
+      float t = (float)breathe_frame / (float)ALECG_BREATH_CYCLE_FRAMES;
+
+      // https://stackoverflow.com/a/25730573/770938 (ParametricBlend)
+      // float sqt = square(t);
+      // breathe_current = sqt / (2.0f * (sqt - t) + 1.0f);
+
+      // https://stackoverflow.com/a/25730573/770938 (InOutQuadBlend)
+      if(t <= 0.5f) {
+        breathe_current = 2.0f * square(t);
+      } else {
+        t -= 0.5f;
+        breathe_current = 2.0f * t * (1.0f - t) + 0.5;
       }
 
-      if(breathe_direction == 0) {
-        breathe_pause_tick++;
+      if(breathe_frame == 0 || breathe_frame >= ALECG_BREATH_CYCLE_FRAMES) {
+        breathe_direction *= -1;
       }
-
-      if(breathe_pause_tick > breathe_pause_ticks) {
-        breathe_pause_tick = 0;
-        breathe_direction = breathe_current == 0 ? 1 : -1;
-      }
-
-      breathe_current += breathe_direction;
     }
 
     int16_t h1 = rgb_matrix_config.hue;
@@ -131,7 +137,7 @@ void alecg_run_custom_animation(void) {
         // The y range will be 0..64, map this to 0..4
         uint8_t y = (point.y >> 4);
         // Relies on hue being 8-bit and wrapping
-        hsv.h = rgb_matrix_config.hue + (deltaH * y) + breathe_current;
+        hsv.h = rgb_matrix_config.hue + (deltaH * y) + (int)(breathe_current * (float)ALECG_BREATH_MAX);
         hsv.s = rgb_matrix_config.sat + (deltaS * y);
         rgb = hsv_to_rgb( hsv );
         rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
