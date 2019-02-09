@@ -73,8 +73,8 @@ enum alecg_keyboard_side {
   SIDE_RIGHT = 1,
 };
 
-uint8_t alecg_get_led(uint8_t side, uint8_t row, uint8_t column) {
-  static uint8_t alecg_led_mapping[2][5][5] = {{{0}}};
+uint8_t alecg_get_led_by_position(uint8_t side, uint8_t row, uint8_t column) {
+  static uint8_t alecg_led_mapping[2][5][5] = {{{255}}};
 
   if(row > 4 || column > 4) {
     return 0;
@@ -90,8 +90,7 @@ uint8_t alecg_get_led(uint8_t side, uint8_t row, uint8_t column) {
     column += 5;
   }
 
-
-  if(alecg_led_mapping[side][row][column] == 0) {
+  if(alecg_led_mapping[0][0][0] == 255) {
     uint8_t led_count_initializer = side == SIDE_RIGHT ? 0 : DRIVER_1_LED_TOTAL;
     uint8_t led_count_end         = side == SIDE_RIGHT ? DRIVER_1_LED_TOTAL : DRIVER_LED_TOTAL;
     rgb_led led;
@@ -100,7 +99,6 @@ uint8_t alecg_get_led(uint8_t side, uint8_t row, uint8_t column) {
       led = g_rgb_leds[i];
       if (row == led.matrix_co.row && column == led.matrix_co.col) {
         alecg_led_mapping[side][row][column] = i;
-        break;
       }
     }
   }
@@ -108,10 +106,56 @@ uint8_t alecg_get_led(uint8_t side, uint8_t row, uint8_t column) {
   return alecg_led_mapping[side][row][column];
 }
 
+void alecg_get_position_from_index(uint8_t key_index, uint8_t *row_output, uint8_t *column_output) {
+  static uint8_t alecg_position_mapping[DRIVER_LED_TOTAL][2] = {{255}};
+
+  if(key_index > DRIVER_LED_TOTAL) {
+    return;
+  }
+
+  rgb_led led;
+  uint8_t row;
+  uint8_t column;
+
+  if(alecg_position_mapping[0][0] == 255) {
+    for (uint8_t i = 0; i < DRIVER_LED_TOTAL; i++) {
+      led = g_rgb_leds[i];
+
+      row = led.matrix_co.row;
+      column = led.matrix_co.col;
+
+      // All columns after the first row start at index 5. If we're getting row 1+, subtract 5 first
+      if(row > 0) {
+        column -= 5;
+      }
+
+      if(i < DRIVER_1_LED_TOTAL) {
+        // Add 5 if the column is on the right side (first 24 LEDS)
+        column += 5;
+      } else {
+        // Columns on left side are right-to-left. If this is the case, reverse the column index
+        column = 4 - column;
+      }
+
+      alecg_position_mapping[i][0] = row;
+      alecg_position_mapping[i][1] = column;
+    }
+  }
+
+  if(row_output) {
+    *row_output = alecg_position_mapping[key_index][0];
+  }
+
+  if(column_output) {
+    *column_output = alecg_position_mapping[key_index][1];
+  }
+}
+
 enum alecg_custom_animations {
   ALECG_CUSTOM_ANIMATION_OFF = 0,
   ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE,
   ALECG_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS,
+  ALECG_CUSTOM_ANIMATION_SCANNING,
   ALECG_CUSTOM_ANIMATION_LAST,
 };
 
@@ -121,11 +165,17 @@ enum alecg_custom_animations {
 
 #define ALECG_RAINBOW_HOME_KEYS_TICKS_PER_FRAME 3
 
+#define ALECG_SCANNING_COLUMNS 10
+#define ALECG_SCANNING_TICKS_PER_FRAME 4
+#define ALECG_SCANNING_CYCLE_FRAMES 100
+#define ALECG_SCANNING_FALLOFF_RATE 0.995f
+
 uint16_t alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
 
 void alecg_run_custom_animation(void) {
   uint32_t tick = rgb_matrix_get_tick();
 
+  // ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE
   if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE) {
     static float breathe_current = 0;
     static uint16_t breathe_frame = 0;
@@ -177,16 +227,18 @@ void alecg_run_custom_animation(void) {
     RGB rgb;
     Point point;
     for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
-        // map_led_to_point( i, &point );
-        point = g_rgb_leds[i].point;
-        // The y range will be 0..64, map this to 0..4
-        uint8_t y = (point.y >> 4);
-        // Relies on hue being 8-bit and wrapping
-        hsv.h = rgb_matrix_config.hue + (deltaH * y) + (int)(breathe_current * (float)ALECG_BREATH_MAX);
-        hsv.s = rgb_matrix_config.sat + (deltaS * y);
-        rgb = hsv_to_rgb( hsv );
-        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+      // map_led_to_point( i, &point );
+      point = g_rgb_leds[i].point;
+      // The y range will be 0..64, map this to 0..4
+      uint8_t y = (point.y >> 4);
+      // Relies on hue being 8-bit and wrapping
+      hsv.h = rgb_matrix_config.hue + (deltaH * y) + (int)(breathe_current * (float)ALECG_BREATH_MAX);
+      hsv.s = rgb_matrix_config.sat + (deltaS * y);
+      rgb = hsv_to_rgb( hsv );
+      rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
     }
+
+  // ALECG_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS
   } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS) {
     static uint8_t v_modifier = 0;
     if((tick % ALECG_RAINBOW_HOME_KEYS_TICKS_PER_FRAME) == 0) {
@@ -201,8 +253,8 @@ void alecg_run_custom_animation(void) {
     }
 
     uint8_t home_keys[] = {
-      alecg_get_led(SIDE_LEFT, 2, 0), alecg_get_led(SIDE_LEFT, 2, 1), alecg_get_led(SIDE_LEFT, 2, 2), alecg_get_led(SIDE_LEFT, 2, 3),
-      alecg_get_led(SIDE_RIGHT, 2, 1), alecg_get_led(SIDE_RIGHT, 2, 2), alecg_get_led(SIDE_RIGHT, 2, 3), alecg_get_led(SIDE_RIGHT, 2, 4),
+      alecg_get_led_by_position(SIDE_LEFT, 2, 0), alecg_get_led_by_position(SIDE_LEFT, 2, 1), alecg_get_led_by_position(SIDE_LEFT, 2, 2), alecg_get_led_by_position(SIDE_LEFT, 2, 3),
+      alecg_get_led_by_position(SIDE_RIGHT, 2, 1), alecg_get_led_by_position(SIDE_RIGHT, 2, 2), alecg_get_led_by_position(SIDE_RIGHT, 2, 3), alecg_get_led_by_position(SIDE_RIGHT, 2, 4),
     };
     uint8_t home_keys_length = sizeof(home_keys) / sizeof(uint8_t);
 
@@ -215,6 +267,56 @@ void alecg_run_custom_animation(void) {
       hsv.h = i * (255 / home_keys_length) - v_modifier;
       rgb = hsv_to_rgb(hsv);
       rgb_matrix_set_color(key, rgb.r, rgb.g, rgb.b);
+    }
+
+  // ALECG_CUSTOM_ANIMATION_SCANNING
+  } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_SCANNING) {
+    static float scan_values[ALECG_SCANNING_COLUMNS] = {0};
+    static float scan_current = 0;
+    static uint16_t scan_frame = 0;
+    static int8_t scan_direction = 1;
+
+    if((tick % ALECG_SCANNING_TICKS_PER_FRAME) == 0) {
+      scan_frame += scan_direction;
+
+      float t = (float)scan_frame / (float)ALECG_SCANNING_CYCLE_FRAMES;
+
+      // https://stackoverflow.com/a/25730573/770938 (InOutQuadBlend)
+      if(t <= 0.5f) {
+        scan_current = 2.0f * square(t);
+      } else {
+        t -= 0.5f;
+        scan_current = 2.0f * t * (1.0f - t) + 0.5;
+      }
+
+      if(scan_frame == 0 || scan_frame >= ALECG_SCANNING_CYCLE_FRAMES) {
+        scan_direction *= -1;
+      }
+    }
+
+    float scan_location_column = scan_current * (float)(ALECG_SCANNING_COLUMNS - 1);
+    float distance_from_scan_line;
+
+    for(uint8_t column_index = 0; column_index < ALECG_SCANNING_COLUMNS; column_index++) {
+      distance_from_scan_line = fabs(scan_location_column - (float)column_index);
+
+      if(distance_from_scan_line <= 1.0) {
+        scan_values[column_index] = fmaxf(scan_values[column_index] * ALECG_SCANNING_FALLOFF_RATE, (1.0 - distance_from_scan_line));
+      } else {
+        scan_values[column_index] *= ALECG_SCANNING_FALLOFF_RATE;
+      }
+    }
+
+    HSV hsv = { .h = 74 , .s = 255, .v = 255 };
+    RGB rgb;
+    uint8_t column;
+
+    for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
+      alecg_get_position_from_index(i, /* row */ NULL, &column);
+      hsv.v = (uint8_t)(scan_values[column] * 255.0);
+
+      rgb = hsv_to_rgb(hsv);
+      rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
     }
   }
 }
