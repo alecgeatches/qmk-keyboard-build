@@ -4,3 +4,4 @@ COMMAND_ENABLE = no
 SRC = matrix.c
 RGBLIGHT_ENABLE = no
 RGB_MATRIX_ENABLE = yes
+MOUSEKEY_ENABLE = no # Mouse keys(+4700)

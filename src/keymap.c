@@ -166,14 +166,18 @@ enum alecg_custom_animations {
 #define ALECG_RAINBOW_HOME_KEYS_TICKS_PER_FRAME 3
 
 #define ALECG_SCANNING_COLUMNS 10
-#define ALECG_SCANNING_TICKS_PER_FRAME 4
-#define ALECG_SCANNING_CYCLE_FRAMES 100
-#define ALECG_SCANNING_FALLOFF_RATE 0.995f
+#define ALECG_SCANNING_SCAN_TIME_MS 2000
+#define ALECG_SCANNING_FALLOFF_RATE_MS 1500
 
 uint16_t alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
+uint16_t alecg_timer;
 
 void alecg_run_custom_animation(void) {
   uint32_t tick = rgb_matrix_get_tick();
+  static uint16_t alecg_timer_elapsed_ms;
+
+  alecg_timer_elapsed_ms = timer_elapsed(alecg_timer);
+  alecg_timer = timer_read();
 
   // ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE
   if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE) {
@@ -264,7 +268,7 @@ void alecg_run_custom_animation(void) {
     for(int i = 0; i < home_keys_length; i++) {
       uint8_t key = home_keys[i];
 
-      hsv.h = i * (255 / home_keys_length) - v_modifier;
+      hsv.h = i * (150 / home_keys_length) - v_modifier;
       rgb = hsv_to_rgb(hsv);
       rgb_matrix_set_color(key, rgb.r, rgb.g, rgb.b);
     }
@@ -272,38 +276,43 @@ void alecg_run_custom_animation(void) {
   // ALECG_CUSTOM_ANIMATION_SCANNING
   } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_SCANNING) {
     static float scan_values[ALECG_SCANNING_COLUMNS] = {0};
-    static float scan_current = 0;
-    static uint16_t scan_frame = 0;
+    static int16_t scan_current_ms = 0;
     static int8_t scan_direction = 1;
 
-    if((tick % ALECG_SCANNING_TICKS_PER_FRAME) == 0) {
-      scan_frame += scan_direction;
+    scan_current_ms = MIN(scan_current_ms + alecg_timer_elapsed_ms, ALECG_SCANNING_SCAN_TIME_MS);
 
-      float t = (float)scan_frame / (float)ALECG_SCANNING_CYCLE_FRAMES;
-
-      // https://stackoverflow.com/a/25730573/770938 (InOutQuadBlend)
-      if(t <= 0.5f) {
-        scan_current = 2.0f * square(t);
-      } else {
-        t -= 0.5f;
-        scan_current = 2.0f * t * (1.0f - t) + 0.5;
-      }
-
-      if(scan_frame == 0 || scan_frame >= ALECG_SCANNING_CYCLE_FRAMES) {
-        scan_direction *= -1;
-      }
+    // https://stackoverflow.com/a/25730573/770938 (InOutQuadBlend)
+    float t = ((float)scan_current_ms / (float)ALECG_SCANNING_SCAN_TIME_MS);
+    if(scan_direction == -1) {
+      t = 1.0 - t;
     }
 
-    float scan_location_column = scan_current * (float)(ALECG_SCANNING_COLUMNS - 1);
+    float ease_output = 0;
+    if(t <= 0.5f) {
+      ease_output = 2.0f * square(t);
+    } else {
+      t -= 0.5f;
+      ease_output = 2.0f * t * (1.0f - t) + 0.5;
+    }
+
+    if(scan_current_ms >= ALECG_SCANNING_SCAN_TIME_MS) {
+      scan_current_ms = 0;
+      scan_direction *= -1;
+    }
+
+    float scan_location_column = ease_output * (float)(ALECG_SCANNING_COLUMNS - 1);
     float distance_from_scan_line;
+    float falloff_value;
 
     for(uint8_t column_index = 0; column_index < ALECG_SCANNING_COLUMNS; column_index++) {
       distance_from_scan_line = fabs(scan_location_column - (float)column_index);
+      falloff_value = scan_values[column_index] * (((float)ALECG_SCANNING_FALLOFF_RATE_MS - alecg_timer_elapsed_ms)/(float)ALECG_SCANNING_FALLOFF_RATE_MS);
 
-      if(distance_from_scan_line <= 1.0) {
-        scan_values[column_index] = fmaxf(scan_values[column_index] * ALECG_SCANNING_FALLOFF_RATE, (1.0 - distance_from_scan_line));
+      if(distance_from_scan_line <= 2.0) {
+        // If the scan line is close to this column, set the brightness according to the distance from the line, or the current falloff value if it's higher
+        scan_values[column_index] = fmaxf(falloff_value, (2.0 - distance_from_scan_line)/2.0);
       } else {
-        scan_values[column_index] *= ALECG_SCANNING_FALLOFF_RATE;
+        scan_values[column_index] = falloff_value;
       }
     }
 
@@ -436,6 +445,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     case ALECG_RGB_CUSTOM_ANIMATION:
       if (record->event.pressed) {
         alecg_custom_animation++;
+        alecg_timer = timer_read();
 
         if (alecg_custom_animation >= ALECG_CUSTOM_ANIMATION_LAST) {
           alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
