@@ -251,7 +251,7 @@ void alecg_run_custom_animation(void) {
 
     for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
         RGB rgb;
-        HSV hsv = { .h = rgb_matrix_config.hue, .s = rgb_matrix_config.sat * 0.8, .v = rgb_matrix_config.val * 0.8 };
+        HSV hsv = { .h = rgb_matrix_config.hue, .s = rgb_matrix_config.sat * 0.8, .v = 0 };
         rgb = hsv_to_rgb(hsv);
         rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
     }
@@ -263,7 +263,7 @@ void alecg_run_custom_animation(void) {
     uint8_t home_keys_length = sizeof(home_keys) / sizeof(uint8_t);
 
     RGB rgb;
-    HSV hsv = { .h = 0, .s = 255, .v = 255 };
+    HSV hsv = { .h = 0, .s = 160, .v = 255 };
 
     for(int i = 0; i < home_keys_length; i++) {
       uint8_t key = home_keys[i];
@@ -322,7 +322,7 @@ void alecg_run_custom_animation(void) {
 
     for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
       alecg_get_position_from_index(i, /* row */ NULL, &column);
-      hsv.v = (uint8_t)(scan_values[column] * 255.0);
+      hsv.v = scan_values[column] * 255.0;
 
       rgb = hsv_to_rgb(hsv);
       rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
