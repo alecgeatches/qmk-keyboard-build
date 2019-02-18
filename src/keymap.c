@@ -8,6 +8,9 @@
 #include "quantum.h"
 #include <math.h>
 
+#include "animation/utility.c"
+#include "animation/tron.c"
+
 #ifndef PI
 #define PI 3.14159265
 #endif
@@ -68,116 +71,11 @@ void set_leds_color(int layer) {
     }
 }
 
-uint8_t alecg_get_led_by_position(uint8_t row, uint8_t column) {
-    static uint8_t alecg_led_mapping[5][10] = {{255}};
-
-    if(row > 4 || column > 9) {
-        return 0;
-    }
-
-    if(alecg_led_mapping[0][0] == 255) {
-        uint8_t row, column;
-        rgb_led led;
-
-        // Left side
-        for (uint8_t i = DRIVER_1_LED_TOTAL; i < DRIVER_LED_TOTAL; i++) {
-            led = g_rgb_leds[i];
-            row = led.matrix_co.row;
-            column = led.matrix_co.col;
-
-            // All columns after the first row start at index 5. If we're getting row 1+, subtract 5 first
-            if(row >= 1) {
-                column -= 5;
-            }
-
-            // Left side of the board goes right-to-left, so reverse column coordinate
-            column = 4 - column;
-
-            alecg_led_mapping[row][column] = i;
-        }
-
-        // Right side
-        for (uint8_t i = 0; i < DRIVER_1_LED_TOTAL; i++) {
-            led = g_rgb_leds[i];
-            row = led.matrix_co.row;
-            column = led.matrix_co.col;
-
-            // All columns after the first row start at index 5. If we're getting row 0, add 5 first to compensate for right side
-            if(row == 0) {
-                column += 5;
-            }
-
-            alecg_led_mapping[row][column] = i;
-        }
-    }
-
-    return alecg_led_mapping[row][column];
-}
-
-void alecg_get_position_from_index(uint8_t key_index, uint8_t *row_output, uint8_t *column_output) {
-    static uint8_t alecg_position_mapping[DRIVER_LED_TOTAL][2] = {{255}};
-
-    if(key_index > DRIVER_LED_TOTAL) {
-        return;
-    }
-
-    rgb_led led;
-    uint8_t row;
-    uint8_t column;
-
-    if(alecg_position_mapping[0][0] == 255) {
-        for (uint8_t i = 0; i < DRIVER_LED_TOTAL; i++) {
-            led = g_rgb_leds[i];
-
-            row = led.matrix_co.row;
-            column = led.matrix_co.col;
-
-            // All columns after the first row start at index 5. If we're getting row 1+, subtract 5 first
-            if(row > 0) {
-                column -= 5;
-            }
-
-            if(i < DRIVER_1_LED_TOTAL) {
-                // Add 5 if the column is on the right side (first 24 LEDS)
-                column += 5;
-            } else {
-                // Columns on left side are right-to-left. If this is the case, reverse the column index
-                column = 4 - column;
-            }
-
-            alecg_position_mapping[i][0] = row;
-            alecg_position_mapping[i][1] = column;
-        }
-    }
-
-    if(row_output) {
-        *row_output = alecg_position_mapping[key_index][0];
-    }
-
-    if(column_output) {
-        *column_output = alecg_position_mapping[key_index][1];
-    }
-}
-
-uint8_t alecg_map_row_column_to_led(uint8_t row, uint8_t column) {
-    rgb_led led;
-
-    for (uint8_t i = 0; i < DRIVER_LED_TOTAL; i++) {
-        led = g_rgb_leds[i];
-        if (row == led.matrix_co.row && column == led.matrix_co.col) {
-            return i;
-        }
-    }
-
-    return 0;
-}
-
 enum alecg_custom_animations {
     ALECG_CUSTOM_ANIMATION_OFF = 0,
     ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE,
     ALECG_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS,
     ALECG_CUSTOM_ANIMATION_SCANNING,
-    // ALECG_CUSTOM_ANIMATION_REACTIVE_RED_FADE,
     ALECG_CUSTOM_ANIMATION_TRON,
     ALECG_CUSTOM_ANIMATION_LAST,
 };
@@ -192,73 +90,9 @@ enum alecg_custom_animations {
 #define ALECG_SCANNING_SCAN_TIME_MS 2000
 #define ALECG_SCANNING_FALLOFF_RATE_MS 1500
 
-#define ALECG_TRON_TURN_TIME_MS 250
-#define ALECG_TRON_DEATH_FADE_MS 800
-
 uint16_t alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
 bool alecg_custom_animation_changed = false;
 uint16_t alecg_timer;
-
-#define ALECG_LED_HITS_TO_REMEMBER 8
-uint8_t alecg_last_led_count;
-uint8_t alecg_last_led_hit[ALECG_LED_HITS_TO_REMEMBER];
-uint16_t alecg_key_hit_timer[DRIVER_LED_TOTAL];
-
-enum alecg_player_state {
-    PLAYER_STATE_ALIVE = 0,
-    PLAYER_STATE_DEAD,
-};
-
-bool alecg_is_moveable_location(uint8_t row, uint8_t column, uint8_t player_positons[][10]) {
-    if(row > 4 || column > 9) {
-        return false;
-    } else if(row == 4 && (column == 4 || column == 5)) {
-        return false;
-    } else if(player_positons[row][column] == 1 || player_positons[row][column] == 2) {
-        return false;
-    }
-
-    return true;
-}
-
-bool alecg_make_next_tron_move(uint8_t player, uint8_t player_positons[][10], uint8_t player_head[]) {
-    int direction = rand() % 4;
-
-    for(int move_tries = 0; move_tries < 4; move_tries += 1) {
-        // Try left
-        if(direction == 0) {
-            if(alecg_is_moveable_location(player_head[0], player_head[1] - 1, player_positons)) {
-                player_head[1] = player_head[1] - 1;
-                return true;
-            }
-
-        // Try right
-        } else if(direction == 1) {
-            if(alecg_is_moveable_location(player_head[0], player_head[1] + 1, player_positons)) {
-                player_head[1] = player_head[1] + 1;
-                return true;
-            }
-
-        // Try up
-        } else if(direction == 2) {
-            if(alecg_is_moveable_location(player_head[0] - 1, player_head[1], player_positons)) {
-                player_head[0] = player_head[0] - 1;
-                return true;
-            }
-
-        // Try down
-        } else if(direction == 3) {
-            if(alecg_is_moveable_location(player_head[0] + 1, player_head[1], player_positons)) {
-                player_head[0] = player_head[0] + 1;
-                return true;
-            }
-        }
-
-        direction = (direction + 1) % 4;
-    }
-
-    return false;
-}
 
 void alecg_run_custom_animation(bool initialize_animation) {
     uint32_t tick = rgb_matrix_get_tick();
@@ -415,215 +249,9 @@ void alecg_run_custom_animation(bool initialize_animation) {
             rgb = hsv_to_rgb(hsv);
             rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
         }
-
-    // ALECG_CUSTOM_ANIMATION_REACTIVE_RED_FADE
-    // } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_REACTIVE_RED_FADE) {
-    //     HSV hsv = { .h = 0, .s = 255, .v = 0 };
-    //     RGB rgb;
-    //     uint8_t led_i;
-    //     uint16_t led_timer, elapsed_since_hit;
-
-    //     rgb_matrix_set_color_all(0, 0, 0);
-
-    //     for (uint8_t i = 0; i < alecg_last_led_count; i++) {
-    //         led_i = alecg_last_led_hit[i];
-    //         led_timer = alecg_key_hit_timer[i];
-    //         elapsed_since_hit = timer_elapsed(led_timer);
-
-    //         if(elapsed_since_hit > 5000) {
-    //             continue;
-    //         }
-
-    //         hsv.v = (1.0 - ((float)elapsed_since_hit / 5000.0)) * 255.0;
-
-    //         rgb = hsv_to_rgb(hsv);
-    //         rgb_matrix_set_color(led_i, rgb.r, rgb.g, rgb.b);
-    //     }
-
     // ALECG_CUSTOM_ANIMATION_TRON
     } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_TRON) {
-        static uint8_t player_positons[5][10] = {{0}};
-
-        static uint8_t player_one_head[2] = {0};
-        static uint8_t player_one_state;
-        static uint16_t time_since_player_one_died;
-
-        static uint8_t player_two_head[2] = {0};
-        static uint8_t player_two_state;
-        static uint16_t time_since_player_two_died;
-
-        static uint16_t time_since_last_turn;
-
-        if(initialize_animation == true) {
-            for(uint8_t row = 0; row < 5; row++) {
-                for(uint8_t column = 0; column < 10; column++) {
-                    player_positons[row][column] = 0;
-                }
-            }
-
-            player_one_state = PLAYER_STATE_ALIVE;
-            player_one_head[0] = 0;
-            player_one_head[1] = 0;
-            player_positons[player_one_head[0]][player_one_head[1]] = 1;
-
-            player_two_state = PLAYER_STATE_ALIVE;
-            player_two_head[0] = 4;
-            player_two_head[1] = 9;
-            player_positons[player_two_head[0]][player_two_head[1]] = 2;
-
-            time_since_last_turn = 0;
-        }
-
-        time_since_last_turn += alecg_timer_elapsed_ms;
-
-        if(time_since_last_turn >= ALECG_TRON_TURN_TIME_MS) {
-            time_since_last_turn = 0;
-
-            // Player 1 Movement
-            if(player_one_state == PLAYER_STATE_ALIVE) {
-                bool player_one_moved = alecg_make_next_tron_move(1, player_positons, player_one_head);
-
-                if(player_one_moved) {
-                    player_positons[player_one_head[0]][player_one_head[1]] = 1;
-                } else {
-                    player_one_state = PLAYER_STATE_DEAD;
-                    time_since_player_one_died = 0;
-
-                    for(uint8_t row = 0; row < 5; row++) {
-                        for(uint8_t column = 0; column < 10; column++) {
-                            if(player_positons[row][column] == 1) {
-                                player_positons[row][column] = 3;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Player 2 Movement
-            if(player_two_state == PLAYER_STATE_ALIVE) {
-                bool player_two_moved = alecg_make_next_tron_move(2, player_positons, player_two_head);
-                if(player_two_moved) {
-                    player_positons[player_two_head[0]][player_two_head[1]] = 2;
-                } else {
-                    player_two_state = PLAYER_STATE_DEAD;
-                    time_since_player_two_died = 0;
-
-                    for(uint8_t row = 0; row < 5; row++) {
-                        for(uint8_t column = 0; column < 10; column++) {
-                            if(player_positons[row][column] == 2) {
-                                player_positons[row][column] = 4;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if(player_one_state == PLAYER_STATE_DEAD) {
-            time_since_player_one_died += alecg_timer_elapsed_ms;
-            bool reset_player_position = false;
-
-            if(time_since_player_one_died > ALECG_TRON_DEATH_FADE_MS) {
-                for(uint8_t row = 0; row < 5; row++) {
-                    for(uint8_t column = 0; column < 10; column++) {
-                        if(player_positons[row][column] == 3) {
-                            player_positons[row][column] = 0;
-                        }
-
-                        if(!reset_player_position && player_positons[row][column] == 0) {
-                            player_one_head[0] = row;
-                            player_one_head[1] = column;
-                            player_positons[row][column] = 1;
-                            reset_player_position = true;
-                        }
-                    }
-                }
-            }
-
-            if(reset_player_position) {
-                player_one_state = PLAYER_STATE_ALIVE;
-            }
-        }
-
-        if(player_two_state == PLAYER_STATE_DEAD) {
-            time_since_player_two_died += alecg_timer_elapsed_ms;
-            bool reset_player_position = false;
-
-            if(time_since_player_two_died > ALECG_TRON_DEATH_FADE_MS) {
-                for(int8_t column = 9; column >= 0; column--) {
-                    for(int8_t row = 4; row >= 0; row--) {
-                        if(player_positons[row][column] == 4) {
-                            player_positons[row][column] = 0;
-                        }
-
-                        if(!reset_player_position && player_positons[row][column] == 0) {
-                            player_two_head[0] = row;
-                            player_two_head[1] = column;
-                            player_positons[row][column] = 2;
-                            reset_player_position = true;
-                        }
-                    }
-                }
-            }
-
-            if(reset_player_position) {
-                player_two_state = PLAYER_STATE_ALIVE;
-            }
-        }
-
-        // Draw board
-        rgb_matrix_set_color_all(0, 0, 0);
-
-        HSV player_one_hsv = { .h = 27, .s = 255, .v = 255 };
-        RGB player_one_rgb = hsv_to_rgb(player_one_hsv);
-
-        HSV player_one_dead_hsv = { .h = player_one_hsv.h, .s = player_one_hsv.s, .v = (1.0 - ((float)time_since_player_one_died / (float)ALECG_TRON_DEATH_FADE_MS)) * 255.0};
-        RGB player_one_dead_rgb = hsv_to_rgb(player_one_dead_hsv);
-
-        HSV player_two_hsv = { .h = 125, .s = 255, .v = 255 };
-        RGB player_two_rgb = hsv_to_rgb(player_two_hsv);
-
-        HSV player_two_dead_hsv = { .h = player_two_hsv.h, .s = player_two_hsv.s, .v = (1.0 - ((float)time_since_player_two_died / (float)ALECG_TRON_DEATH_FADE_MS)) * 255.0};
-        RGB player_two_dead_rgb = hsv_to_rgb(player_two_dead_hsv);
-
-        // Draw player tails
-        uint8_t led_i, row, column;
-
-        for(row = 0; row < 5; row++) {
-            for(column = 0; column < 10; column++) {
-                if(player_positons[row][column] == 1) {
-                    led_i = alecg_get_led_by_position(row, column);
-                    rgb_matrix_set_color(led_i, player_one_rgb.r, player_one_rgb.g, player_one_rgb.b);
-                } else if(player_positons[row][column] == 2) {
-                    led_i = alecg_get_led_by_position(row, column);
-                    rgb_matrix_set_color(led_i, player_two_rgb.r, player_two_rgb.g, player_two_rgb.b);
-                } else if(player_positons[row][column] == 3) {
-                    led_i = alecg_get_led_by_position(row, column);
-                    rgb_matrix_set_color(led_i, player_one_dead_rgb.r, player_one_dead_rgb.g, player_one_dead_rgb.b);
-                } else if(player_positons[row][column] == 4) {
-                    led_i = alecg_get_led_by_position(row, column);
-                    rgb_matrix_set_color(led_i, player_two_dead_rgb.r, player_two_dead_rgb.g, player_two_dead_rgb.b);
-                }
-            }
-        }
-
-        // Draw player heads
-        uint8_t head_i, head_brightness;
-        head_brightness = ((float)time_since_last_turn / (float)ALECG_TRON_TURN_TIME_MS) * 255.0;
-
-        if(player_one_state == PLAYER_STATE_ALIVE) {
-            player_one_hsv.v = head_brightness;
-            player_one_rgb = hsv_to_rgb(player_one_hsv);
-            head_i = alecg_get_led_by_position(player_one_head[0], player_one_head[1]);
-            rgb_matrix_set_color(head_i, player_one_rgb.r, player_one_rgb.g, player_one_rgb.b);
-        }
-
-        if(player_two_state == PLAYER_STATE_ALIVE) {
-            player_two_hsv.v = head_brightness;
-            player_two_rgb = hsv_to_rgb(player_two_hsv);
-            head_i = alecg_get_led_by_position(player_two_head[0], player_two_head[1]);
-            rgb_matrix_set_color(head_i, player_two_rgb.r, player_two_rgb.g, player_two_rgb.b);
-        }
+        alecg_animate_tron(initialize_animation, alecg_timer_elapsed_ms);
     }
 }
 
@@ -688,25 +316,6 @@ const macro_t *action_get_macro(keyrecord_t *record, uint8_t id, uint8_t opt)
 };
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    if (record->event.pressed) {
-        // uint8_t led_i = alecg_map_row_column_to_led(record->event.key.row, record->event.key.col);
-
-        // alecg_last_led_count = 1;
-        // alecg_last_led_hit[0] = led_i;
-        // alecg_key_hit_timer[0] = alecg_timer;
-
-        // if (led_count > 0) {
-        //     for (uint8_t i = LED_HITS_TO_REMEMBER; i > 1; i--) {
-        //         g_last_led_hit[i - 1] = g_last_led_hit[i - 2];
-        //     }
-        //     g_last_led_hit[0] = led[0];
-        //     g_last_led_count = MIN(LED_HITS_TO_REMEMBER, g_last_led_count + 1);
-        // }
-        // for(uint8_t i = 0; i < led_count; i++)
-        //     g_key_hit[led[i]] = 0;
-        // g_any_key_hit = 0;
-    }
-
     switch (keycode) {
         // dynamically generate these.
         case EPRM:
