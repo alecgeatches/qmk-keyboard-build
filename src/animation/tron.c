@@ -1,6 +1,6 @@
 #include "ergodox_ez.h"
 
-#define ALECG_TRON_PLAYER_COUNT 2
+#define ALECG_TRON_PLAYER_COUNT 4
 #define ALECG_TRON_TURN_TIME_MS 450
 #define ALECG_TRON_DEATH_FADE_MS 1350
 

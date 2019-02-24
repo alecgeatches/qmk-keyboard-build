@@ -240,15 +240,23 @@ void alecg_run_custom_animation(bool initialize_animation) {
 
         HSV hsv = { .h = 74 , .s = 255, .v = 255 };
         RGB rgb;
-        uint8_t column;
+        uint8_t led_i;
 
-        for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
-            alecg_get_position_from_index(i, /* row */ NULL, &column);
-            hsv.v = scan_values[column] * 255.0;
+        for(uint8_t row = 0; row < 5; row++) {
+            for(uint8_t column = 0; column < 10; column++) {
+                if(row == 4 && (column == 4 || column == 5)) {
+                    // No LEDs here, skip
+                    continue;
+                }
 
-            rgb = hsv_to_rgb(hsv);
-            rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
+                hsv.v = scan_values[column] * 255.0;
+                rgb = hsv_to_rgb(hsv);
+
+                led_i = alecg_get_led_by_position(row, column);
+                rgb_matrix_set_color(led_i, rgb.r, rgb.g, rgb.b);
+            }
         }
+
     // ALECG_CUSTOM_ANIMATION_TRON
     } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_TRON) {
         alecg_animate_tron(initialize_animation, alecg_timer_elapsed_ms);
