@@ -1,3 +1,5 @@
+#include "ergodox_ez.h"
+
 uint8_t alecg_get_led_by_position(uint8_t row, uint8_t column) {
     static uint8_t alecg_led_mapping[5][10] = {{255}};
 
