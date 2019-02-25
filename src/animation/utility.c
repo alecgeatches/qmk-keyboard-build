@@ -1,47 +1,40 @@
 #include "ergodox_ez.h"
 
-uint8_t alecg_get_led_by_position(uint8_t row, uint8_t column) {
-    static uint8_t alecg_led_mapping[5][10] = {{255}};
+/*
+    Ergodox EZ Glow LED positions look like this:
 
+    | left side     |    right side |
+    ---------------------------------
+    28 27 26 25 24  |  00 01 02 03 04
+    33 32 31 30 29  |  05 06 07 08 09
+    38 37 36 35 34  |  10 11 12 13 14
+    43 42 41 40 39  |  15 16 17 18 19
+    47 46 45 44     |     20 21 22 23
+
+    To get led_i, do some math depending on the side
+*/
+
+uint8_t alecg_get_led_by_position(uint8_t row, uint8_t column) {
     if(row > 4 || column > 9) {
         return 0;
     }
 
-    if(alecg_led_mapping[0][0] == 255) {
-        uint8_t row, column;
-        rgb_led led;
-
-        // Left side
-        for (uint8_t i = DRIVER_1_LED_TOTAL; i < DRIVER_LED_TOTAL; i++) {
-            led = g_rgb_leds[i];
-            row = led.matrix_co.row;
-            column = led.matrix_co.col;
-
-            // All columns after the first row start at index 5. If we're getting row 1+, subtract 5 first
-            if(row >= 1) {
-                column -= 5;
-            }
-
-            // Left side of the board goes right-to-left, so reverse column coordinate
-            column = 4 - column;
-
-            alecg_led_mapping[row][column] = i;
-        }
-
-        // Right side
-        for (uint8_t i = 0; i < DRIVER_1_LED_TOTAL; i++) {
-            led = g_rgb_leds[i];
-            row = led.matrix_co.row;
-            column = led.matrix_co.col;
-
-            // All columns after the first row start at index 5. If we're getting row 0, add 5 first to compensate for right side
-            if(row == 0) {
-                column += 5;
-            }
-
-            alecg_led_mapping[row][column] = i;
+    // Adjust column for missing LED in last row
+    if(row == 4) {
+        if(column <= 4) {
+            // Left side
+            column += 1;
+        } else {
+            // Right side
+            column -= 1;
         }
     }
 
-    return alecg_led_mapping[row][column];
+    if(column <= 4) {
+        // Left side
+        return 24 + (4 - column) + row * 5;
+    } else {
+        // Right side
+        return column - 5 + row * 5;
+    }
 }
