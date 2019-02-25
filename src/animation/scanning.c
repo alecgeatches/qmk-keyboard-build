@@ -9,15 +9,6 @@ void alecg_animate_scanning(bool initialize_animation, uint16_t elapsed_ms) {
     static int16_t scan_current_ms = 0;
     static int8_t scan_direction = 1;
 
-    if(initialize_animation == true) {
-        for(uint8_t column = 0; column < ALECG_SCANNING_COLUMNS; column++) {
-            scan_values[column] = 0;
-        }
-
-        scan_current_ms = 0;
-        scan_direction = 1;
-    }
-
     scan_current_ms = MIN(scan_current_ms + elapsed_ms, ALECG_SCANNING_SCAN_TIME_MS);
 
     // https://stackoverflow.com/a/25730573/770938 (InOutQuadBlend)
