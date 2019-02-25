@@ -55,11 +55,18 @@ void alecg_animate_tron(bool initialize_animation, uint16_t elapsed_ms) {
     // Handle players after a turn has elapsed
     if(time_since_last_turn >= ALECG_TRON_TURN_TIME_MS) {
         time_since_last_turn = 0;
+        uint8_t dead_player_count = 0;
 
         for(uint8_t i = 0; i < ALECG_TRON_PLAYER_COUNT; i++) {
             if(alecg_tron_players[i].state == PLAYER_STATE_ALIVE) {
                 alecg_move_tron_player(&alecg_tron_players[i], player_positons);
             } else if(alecg_tron_players[i].state == PLAYER_STATE_DEAD && alecg_tron_players[i].time_spent_dead_ms >= ALECG_TRON_DEATH_FADE_MS) {
+                dead_player_count++;
+            }
+        }
+
+        if(dead_player_count == ALECG_TRON_PLAYER_COUNT) {
+            for(uint8_t i = 0; i < ALECG_TRON_PLAYER_COUNT; i++) {
                 alecg_respawn_dead_player(&alecg_tron_players[i], player_positons);
             }
         }
