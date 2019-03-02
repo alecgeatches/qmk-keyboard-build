@@ -14,9 +14,15 @@
     To get led_i, do some math depending on the side
 */
 
+#define ALECG_RGB_ROWS 5
+#define ALECG_RGB_COLUMNS 10
+
 uint8_t alecg_get_led_by_position(uint8_t row, uint8_t column) {
     if(row > 4 || column > 9) {
-        return 0;
+        return 255;
+    } else if(row == 4 && (column == 4 || column == 5)) {
+        // No LEDs in these two places on Ergodox EZ
+        return 255;
     }
 
     // Adjust column for missing LED in last row
