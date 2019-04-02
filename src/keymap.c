@@ -9,9 +9,22 @@
 #include <math.h>
 
 #include "animation/utility.c"
+
+#if ALECG_ENABLE_CUSTOM_ANIMATION_GRADIENT_BREATHE
+#include "animation/gradient-breathe.c"
+#endif
+#if ALECG_ENABLE_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS
+#include "animation/rainbow-home-keys.c"
+#endif
+#if ALECG_ENABLE_CUSTOM_ANIMATION_SCANNING
 #include "animation/scanning.c"
-#include "animation/tron.c"
+#endif
+#if ALECG_ENABLE_CUSTOM_ANIMATION_PLASMA
 #include "animation/plasma.c"
+#endif
+#if ALECG_ENABLE_CUSTOM_ANIMATION_TRON
+#include "animation/tron.c"
+#endif
 
 #ifndef PI
 #define PI 3.14159265
@@ -74,19 +87,25 @@ void set_leds_color(int layer) {
 
 enum alecg_custom_animations {
     ALECG_CUSTOM_ANIMATION_OFF = 0,
-    ALECG_CUSTOM_ANIMATION_PLASMA,
+
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_GRADIENT_BREATHE
     ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE,
+    #endif
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS
     ALECG_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS,
+    #endif
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_PLASMA
+    ALECG_CUSTOM_ANIMATION_PLASMA,
+    #endif
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_SCANNING
     ALECG_CUSTOM_ANIMATION_SCANNING,
+    #endif
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_TRON
     ALECG_CUSTOM_ANIMATION_TRON,
-    ALECG_CUSTOM_ANIMATION_LAST,
+    #endif
+
+    ALECG_CUSTOM_ANIMATION_LAST
 };
-
-#define ALECG_BREATH_MAX 80
-#define ALECG_BREATH_TICKS_PER_FRAME 4
-#define ALECG_BREATH_CYCLE_FRAMES 250
-
-#define ALECG_RAINBOW_HOME_KEYS_TICKS_PER_FRAME 3
 
 uint16_t alecg_custom_animation = ALECG_CUSTOM_ANIMATION_OFF;
 bool alecg_custom_animation_changed = false;
@@ -99,106 +118,38 @@ void alecg_run_custom_animation(bool initialize_animation) {
     alecg_timer_elapsed_ms = timer_elapsed(alecg_timer);
     alecg_timer = timer_read();
 
-    // ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE
-    if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE) {
-        static float breathe_current = 0;
-        static uint16_t breathe_frame = 0;
-        static int8_t breathe_direction = 1;
+    // Mark variables as used so that the compiler doesn't complain if animations are #ifdef'd out
+    (void)tick;
+    (void)alecg_timer_elapsed_ms;
 
-        if((tick % ALECG_BREATH_TICKS_PER_FRAME) == 0) {
-            breathe_frame += breathe_direction;
+    if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_OFF) {
+        // Do nothing
 
-            float t = (float)breathe_frame / (float)ALECG_BREATH_CYCLE_FRAMES;
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_GRADIENT_BREATHE
+    } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE) {
+        alecg_animate_gradient_breathe(tick);
+    #endif
 
-            // https://easings.net
-            // http://www.gizma.com/easing/
-            // https://stackoverflow.com/a/25730573/770938 (ParametricBlend)
-            // float sqt = square(t);
-            // breathe_current = sqt / (2.0f * (sqt - t) + 1.0f);
-
-            // https://stackoverflow.com/a/25730573/770938 (InOutQuadBlend)
-            if(t <= 0.5f) {
-                breathe_current = 2.0f * square(t);
-            } else {
-                t -= 0.5f;
-                breathe_current = 2.0f * t * (1.0f - t) + 0.5;
-            }
-
-            if(breathe_frame == 0 || breathe_frame >= ALECG_BREATH_CYCLE_FRAMES) {
-                breathe_direction *= -1;
-            }
-        }
-
-        int16_t h1 = rgb_matrix_config.hue;
-        int16_t h2 = (rgb_matrix_config.hue + 180) % 360;
-        int16_t deltaH = h2 - h1;
-
-        // Take the shortest path between hues
-        if (deltaH > 127) {
-            deltaH -= 256;
-        } else if (deltaH < -127) {
-            deltaH += 256;
-        }
-
-        // Divide delta by 4, this gives the delta per row
-        deltaH /= 4;
-
-        int16_t s1 = rgb_matrix_config.sat;
-        int16_t s2 = rgb_matrix_config.hue;
-        int16_t deltaS = (s2 - s1) / 4;
-
-        HSV hsv = { .h = 0, .s = 255, .v = rgb_matrix_config.val };
-        RGB rgb;
-        Point point;
-        for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
-            // map_led_to_point( i, &point );
-            point = g_rgb_leds[i].point;
-            // The y range will be 0..64, map this to 0..4
-            uint8_t y = (point.y >> 4);
-            // Relies on hue being 8-bit and wrapping
-            hsv.h = rgb_matrix_config.hue + (deltaH * y) + (int)(breathe_current * (float)ALECG_BREATH_MAX);
-            hsv.s = rgb_matrix_config.sat + (deltaS * y);
-            rgb = hsv_to_rgb( hsv );
-            rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
-        }
-
-    // ALECG_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS
     } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS) {
-        static uint8_t v_modifier = 0;
-        if((tick % ALECG_RAINBOW_HOME_KEYS_TICKS_PER_FRAME) == 0) {
-            v_modifier += 1;
-        }
+        alecg_animate_rainbow_home_keys(tick);
+    #endif
 
-        for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
-            RGB rgb;
-            HSV hsv = { .h = rgb_matrix_config.hue, .s = rgb_matrix_config.sat * 0.8, .v = 0 };
-            rgb = hsv_to_rgb(hsv);
-            rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
-        }
-
-        uint8_t home_keys[] = {
-            alecg_get_led_by_position(2, 0), alecg_get_led_by_position(2, 1), alecg_get_led_by_position(2, 2), alecg_get_led_by_position(2, 3),
-            alecg_get_led_by_position(2, 6), alecg_get_led_by_position(2, 7), alecg_get_led_by_position(2, 8), alecg_get_led_by_position(2, 9),
-        };
-        uint8_t home_keys_length = sizeof(home_keys) / sizeof(uint8_t);
-
-        RGB rgb;
-        HSV hsv = { .h = 0, .s = 160, .v = 255 };
-
-        for(int i = 0; i < home_keys_length; i++) {
-            uint8_t key = home_keys[i];
-
-            hsv.h = i * (150 / home_keys_length) - v_modifier;
-            rgb = hsv_to_rgb(hsv);
-            rgb_matrix_set_color(key, rgb.r, rgb.g, rgb.b);
-        }
-
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_SCANNING
     } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_SCANNING) {
         alecg_animate_scanning(initialize_animation, alecg_timer_elapsed_ms);
+    #endif
+
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_TRON
     } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_TRON) {
         alecg_animate_tron(initialize_animation, alecg_timer_elapsed_ms);
+    #endif
+
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_PLASMA
     } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_PLASMA) {
         alecg_animate_plasma(tick);
+    #endif
+
     }
 }
 
