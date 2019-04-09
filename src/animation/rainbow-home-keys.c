@@ -8,12 +8,7 @@ void alecg_animate_rainbow_home_keys(uint32_t tick) {
         v_modifier += 1;
     }
 
-    for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
-        RGB rgb;
-        HSV hsv = { .h = rgb_matrix_config.hue, .s = rgb_matrix_config.sat * 0.8, .v = 0 };
-        rgb = hsv_to_rgb(hsv);
-        rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
-    }
+    rgb_matrix_set_color_all(0, 0, 0);
 
     uint8_t home_keys[] = {
         alecg_get_led_by_position(2, 0), alecg_get_led_by_position(2, 1), alecg_get_led_by_position(2, 2), alecg_get_led_by_position(2, 3),

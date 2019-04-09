@@ -25,6 +25,9 @@
 #if ALECG_ENABLE_CUSTOM_ANIMATION_TRON
 #include "animation/tron.c"
 #endif
+#if ALECG_ENABLE_CUSTOM_ANIMATION_FIRE
+#include "animation/fire.c"
+#endif
 
 #ifndef PI
 #define PI 3.14159265
@@ -103,6 +106,9 @@ enum alecg_custom_animations {
     #if ALECG_ENABLE_CUSTOM_ANIMATION_TRON
     ALECG_CUSTOM_ANIMATION_TRON,
     #endif
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_FIRE
+    ALECG_CUSTOM_ANIMATION_FIRE,
+    #endif
 
     ALECG_CUSTOM_ANIMATION_LAST
 };
@@ -140,14 +146,19 @@ void alecg_run_custom_animation(bool initialize_animation) {
         alecg_animate_scanning(initialize_animation, alecg_timer_elapsed_ms);
     #endif
 
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_PLASMA
+    } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_PLASMA) {
+        alecg_animate_plasma(tick);
+    #endif
+
     #if ALECG_ENABLE_CUSTOM_ANIMATION_TRON
     } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_TRON) {
         alecg_animate_tron(initialize_animation, alecg_timer_elapsed_ms);
     #endif
 
-    #if ALECG_ENABLE_CUSTOM_ANIMATION_PLASMA
-    } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_PLASMA) {
-        alecg_animate_plasma(tick);
+    #if ALECG_ENABLE_CUSTOM_ANIMATION_FIRE
+    } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_FIRE) {
+        alecg_animate_fire(initialize_animation, tick);
     #endif
 
     }
