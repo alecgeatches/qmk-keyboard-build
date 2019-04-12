@@ -1,3 +1,6 @@
+#pragma once
+#if ALECG_ENABLE_CUSTOM_ANIMATION_TRON
+
 #include "ergodox_ez.h"
 
 #define ALECG_TRON_PLAYER_COUNT 4
@@ -233,3 +236,5 @@ RGB alecg_get_player_color(uint8_t player_id, uint8_t value) {
 
     return hsv_to_rgb(hsv);
 }
+
+#endif

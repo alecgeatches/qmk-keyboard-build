@@ -1,12 +1,13 @@
+#pragma once
+#if ALECG_ENABLE_CUSTOM_ANIMATION_RAINBOW_HOME_KEYS
+
 #include "ergodox_ez.h"
 
-#define ALECG_RAINBOW_HOME_KEYS_TICKS_PER_FRAME 3
+extern rgb_counters_t g_rgb_counters;
+extern rgb_config_t rgb_matrix_config;
 
-void alecg_animate_rainbow_home_keys(uint32_t tick) {
-    static uint8_t v_modifier = 0;
-    if((tick % ALECG_RAINBOW_HOME_KEYS_TICKS_PER_FRAME) == 0) {
-        v_modifier += 1;
-    }
+void alecg_animate_rainbow_home_keys(void) {
+    uint8_t time = scale16by8(g_rgb_counters.tick, rgb_matrix_config.speed / 4);
 
     rgb_matrix_set_color_all(0, 0, 0);
 
@@ -22,8 +23,10 @@ void alecg_animate_rainbow_home_keys(uint32_t tick) {
     for(int i = 0; i < home_keys_length; i++) {
         uint8_t key = home_keys[i];
 
-        hsv.h = i * (150 / home_keys_length) - v_modifier;
+        hsv.h = i * (150 / home_keys_length) - time;
         rgb = hsv_to_rgb(hsv);
         rgb_matrix_set_color(key, rgb.r, rgb.g, rgb.b);
     }
 }
+
+#endif

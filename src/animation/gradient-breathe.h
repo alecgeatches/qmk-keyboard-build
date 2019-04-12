@@ -1,12 +1,18 @@
+#pragma once
+#if ALECG_ENABLE_CUSTOM_ANIMATION_GRADIENT_BREATHE
+
 #include "ergodox_ez.h"
 
 #define ALECG_BREATH_MAX 80
 #define ALECG_BREATH_TICKS_PER_FRAME 4
 #define ALECG_BREATH_CYCLE_FRAMES 250
 
+extern const rgb_led g_rgb_leds[DRIVER_LED_TOTAL];
 extern rgb_config_t rgb_matrix_config;
 
 void alecg_animate_gradient_breathe(uint32_t tick) {
+    RGB_MATRIX_USE_LIMITS(led_min, led_max);
+
     static float breathe_current = 0;
     static uint16_t breathe_frame = 0;
     static int8_t breathe_direction = 1;
@@ -55,8 +61,8 @@ void alecg_animate_gradient_breathe(uint32_t tick) {
 
     HSV hsv = { .h = 0, .s = 255, .v = rgb_matrix_config.val };
     RGB rgb;
-    Point point;
-    for (int i = 0; i < DRIVER_LED_TOTAL; i++) {
+    point_t point;
+    for (uint8_t i = led_min; i < led_max; i++) {
         // map_led_to_point( i, &point );
         point = g_rgb_leds[i].point;
         // The y range will be 0..64, map this to 0..4
@@ -68,3 +74,5 @@ void alecg_animate_gradient_breathe(uint32_t tick) {
         rgb_matrix_set_color(i, rgb.r, rgb.g, rgb.b);
     }
 }
+
+#endif

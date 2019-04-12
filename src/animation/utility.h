@@ -1,4 +1,13 @@
+#pragma once
+
 #include "ergodox_ez.h"
+
+#if !defined(PI)
+#define PI 3.14159265
+#endif
+
+#define ALECG_RGB_ROWS 5
+#define ALECG_RGB_COLUMNS 10
 
 /*
     Ergodox EZ Glow LED positions look like this:
@@ -13,9 +22,6 @@
 
     To get led_i, do some math depending on the side
 */
-
-#define ALECG_RGB_ROWS 5
-#define ALECG_RGB_COLUMNS 10
 
 uint8_t alecg_get_led_by_position(uint8_t row, uint8_t column) {
     if(row > 4 || column > 9) {
