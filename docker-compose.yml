@@ -1,0 +1,13 @@
+version: '3.4'
+
+# SSH in:
+# docker-compose exec qmk bash
+services:
+  qmk:
+    container_name: qmk
+    build:
+      context: .
+      dockerfile: ./docker/qmk-fast/Dockerfile
+    restart: "no" # Fail if container does not start properly
+    volumes:
+      - ./src:/qmk_firmware/keyboards/ergodox_ez/keymaps/alecg
