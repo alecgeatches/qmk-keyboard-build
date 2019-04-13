@@ -22,7 +22,7 @@
 
 // Reactive animations
 #include "animation/utility-reactive.h"
-#include "animation/reactive-dots.h"
+#include "animation/reactive-heatmap.h"
 
 enum custom_keycodes {
   PLACEHOLDER = SAFE_RANGE, // can always be here
@@ -92,8 +92,8 @@ void set_leds_color(int layer) {
 enum alecg_custom_animations {
   ALECG_CUSTOM_ANIMATION_OFF = 0,
 
-  #if ALECG_ENABLE_CUSTOM_ANIMATION_REACTIVE_DOTS
-  ALECG_CUSTOM_ANIMATION_REACTIVE_DOTS,
+  #if ALECG_ENABLE_CUSTOM_ANIMATION_REACTIVE_HEATMAP
+  ALECG_CUSTOM_ANIMATION_REACTIVE_HEATMAP,
   #endif
   #if ALECG_ENABLE_CUSTOM_ANIMATION_GRADIENT_BREATHE
   ALECG_CUSTOM_ANIMATION_GRADIENT_BREATHE,
@@ -131,9 +131,9 @@ void alecg_run_custom_animation(bool initialize_animation) {
   if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_OFF) {
     // Do nothing
 
-  #if ALECG_ENABLE_CUSTOM_ANIMATION_REACTIVE_DOTS
-  } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_REACTIVE_DOTS) {
-    alecg_animate_reactive_dots();
+  #if ALECG_ENABLE_CUSTOM_ANIMATION_REACTIVE_HEATMAP
+  } else if(alecg_custom_animation == ALECG_CUSTOM_ANIMATION_REACTIVE_HEATMAP) {
+    alecg_animate_reactive_heatmap();
   #endif
 
   #if ALECG_ENABLE_CUSTOM_ANIMATION_GRADIENT_BREATHE
@@ -224,7 +224,17 @@ const macro_t *action_get_macro(keyrecord_t *record, uint8_t id, uint8_t opt) {
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
   if (record->event.pressed) {
-    alecg_reactive_process_record(record);
+    uint8_t row = record->event.key.row;
+    uint8_t column = record->event.key.col;
+    matrix_co_t matrix_co;
+
+    for (uint8_t i = 0; i < DRIVER_LED_TOTAL; i++) {
+      matrix_co = g_rgb_leds[i].matrix_co;
+
+      if (row == matrix_co.row && column == matrix_co.col) {
+        alecg_reactive_process_key_hit(i);
+      }
+    }
   }
 
   switch (keycode) {
