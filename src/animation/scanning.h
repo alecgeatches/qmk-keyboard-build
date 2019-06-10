@@ -10,12 +10,12 @@
 extern rgb_counters_t g_rgb_counters;
 extern rgb_config_t rgb_matrix_config;
 
-void alecg_animate_scanning(void) {
+void alecg_animate_scanning(uint16_t elapsed_ms) {
     static float scan_values[ALECG_SCANNING_COLUMNS] = {0};
     static int16_t scan_current_ms = 0;
     static int8_t scan_direction = 1;
 
-    uint8_t time = scale16by8(g_rgb_counters.tick, rgb_matrix_config.speed / 4);
+    // uint8_t time = scale16by8(g_rgb_counters.tick, rgb_matrix_config.speed / 4);
 
     scan_current_ms = MIN(scan_current_ms + elapsed_ms, ALECG_SCANNING_SCAN_TIME_MS);
 
